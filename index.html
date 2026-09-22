@@ -87,6 +87,16 @@ html{overflow-anchor:none;scroll-behavior:auto}
 .attack-cell .slot{transition:none}
 .play-intro h1{min-height:3lh}
 @media(max-width:540px){.play-intro h1{min-height:5lh}}
+/* The opponent's attack markers mirror the active player's markers. */
+.opponent-board .attack-board{padding-top:0;padding-bottom:30px}
+.opponent-board .attack-line{top:auto;bottom:-13px}
+.opponent-board .attack-cell.attack-used{translate:0 24px}
+.opponent-board .attack-cell.attack-used:has(>.wounded:not(.attacker-selected):not(.selected)){translate:none}
+.opponent-board .attack-cell.attack-used>.wounded:not(.attacker-selected):not(.selected){translate:0 calc(24px + var(--wounded-lift,0px))}
+@media(max-width:540px){
+ .opponent-board .attack-cell.attack-used:has(>.wounded:not(.attacker-selected):not(.selected)){translate:0 24px}
+ .opponent-board .attack-cell.attack-used>.wounded:not(.attacker-selected):not(.selected){translate:none}
+}
 </style>
 </head>
 <body>
@@ -642,7 +652,7 @@ function grid(player) {
       + (battleReveal.attackerPlayer === player && !game.boards[player][battleReveal.attackerIndex] ? 1 : 0)
     : 0;
   const displayedCardCount = game.boards[player].filter(Boolean).length + battleSnapshotCount;
-  return `<section class="grid-panel player-${player + 1} ${own ? 'own-board' : 'opponent-board'}"><div class="board-identity"><span class="player-dot"></span><div><small>${own ? 'ДОЛУ · ТИ' : 'ГОРЕ · ПРОТИВНИК'}</small><h2>${label(player)}</h2></div><b>${displayedCardCount} карти</b></div><div class="board attack-board">${[0,1,2].map(r => `<div class="attack-row"><span class="attack-line" aria-hidden="true"></span>${order.slice(r*3,r*3+3).map(i => {
+  return `<section class="grid-panel player-${player + 1} ${own ? 'own-board' : 'opponent-board'}"><div class="board-identity"><span class="player-dot"></span><div><small>${own ? 'ДОЛУ · ТИ' : 'ГОРЕ · ПРОТИВНИК'}</small><h2>${label(player)}</h2></div><b>${displayedCardCount} карти</b></div><div class="board attack-board">${[0,1,2].map(r => `<div class="attack-row">${game.phase === 'revealed' ? '<span class="attack-line" aria-hidden="true"></span>' : ''}${order.slice(r*3,r*3+3).map(i => {
     const isBattleReveal = battleReveal?.player === player && battleReveal.index === i;
     const isBattleAttacker = battleReveal?.attackerPlayer === player && battleReveal.attackerIndex === i;
     const isBattlePreview = isBattleReveal || isBattleAttacker;
@@ -665,7 +675,7 @@ function grid(player) {
     const powerNote = powerBonus ? `<em class="boost">АКТИВЕН БОНУС · +${powerBonus} POWER<small>от ${escape(bonusSource(game, player, i))}</small></em>` : '';
     const displayedPower = powerBonus ? `${c.power} (+${powerBonus})` : c.power;
     const effectButton = selectedEffectAvailable ? `<span class="inline-effect-button" data-action="stinger-effect" data-index="${i}" role="button">Активирай ефект</span>` : '';
-    return `<div class="attack-cell ${c.attackComplete && !isBattlePreview ? 'attack-used' : ''}"><button class="slot ${ownerHidden ? 'owner-hidden' : visible ? c.color : 'hidden-card'} ${c.wounds && !isBattlePreview ? 'wounded' : ''} ${highlight ? 'legal' : ''} ${isSelectedAttacker ? 'attacker-selected' : ''} ${canChangeAttacker ? 'attacker-switchable' : ''} ${stinger?.sacrifices.includes(i) && own ? 'selected' : ''}" data-action="${canChangeAttacker ? 'change-attacker' : 'board'}" data-player="${player}" data-index="${i}" ${stinger && own ? `aria-pressed="${Boolean(selectionOrder)}"` : ''} ${enabled ? '' : 'disabled'} aria-label="${label(player)}, ред ${Math.floor(i/3)+1}, колона ${i%3+1}${visible ? ', '+escape(c.name)+', текуща сила '+effectivePower : ', скрита карта'}">${ownerHidden ? `<span class="card-flip"><span class="card-face card-back"><span class="back-mark">TT<br>BOOM</span><span class="state-label">ТВОЯ СКРИТА КАРТА · ЗАДРЪЖ, ЗА ДА ВИДИШ</span></span><span class="card-face card-front">${card({...c,power:displayedPower}, `${powerNote}<span class="state-label">СКРИТА · ${Math.floor(i/3)+1}.${i%3+1}</span>`)}</span></span>` : isBattleReveal ? `<span class="card-flip battle-card-flip"><span class="card-face card-back"><span class="back-mark">TT<br>BOOM</span></span><span class="card-face card-front ${c.color}">${card({...c,wounds:0,power:displayedPower}, '<span class="state-label">ЗАЩИТНИК</span>')}</span></span>` : isBattleAttacker ? card({...c,wounds:0,power:displayedPower}, '<span class="attacker-badge">НАПАДАТЕЛ</span>') : visible ? card({...c,power:displayedPower}, `${isSelectedAttacker ? '<span class="attacker-badge">НАПАДАТЕЛ</span>' : ''}${selectionBadge}${supportBadge}${effectButton}${powerNote}<span class="state-label">${Math.floor(i/3)+1}.${i%3+1}</span>`) : `<span class="back-mark">TT<br>BOOM</span><span class="state-label">${Math.floor(i/3)+1}.${i%3+1} · СКРИТА</span>`}</button></div>`;
+    return `<div class="attack-cell ${game.phase === 'revealed' && c.attackComplete && !isBattlePreview ? 'attack-used' : ''}"><button class="slot ${ownerHidden ? 'owner-hidden' : visible ? c.color : 'hidden-card'} ${c.wounds && !isBattlePreview ? 'wounded' : ''} ${highlight ? 'legal' : ''} ${isSelectedAttacker ? 'attacker-selected' : ''} ${canChangeAttacker ? 'attacker-switchable' : ''} ${stinger?.sacrifices.includes(i) && own ? 'selected' : ''}" data-action="${canChangeAttacker ? 'change-attacker' : 'board'}" data-player="${player}" data-index="${i}" ${stinger && own ? `aria-pressed="${Boolean(selectionOrder)}"` : ''} ${enabled ? '' : 'disabled'} aria-label="${label(player)}, ред ${Math.floor(i/3)+1}, колона ${i%3+1}${visible ? ', '+escape(c.name)+', текуща сила '+effectivePower : ', скрита карта'}">${ownerHidden ? `<span class="card-flip"><span class="card-face card-back"><span class="back-mark">TT<br>BOOM</span><span class="state-label">ТВОЯ СКРИТА КАРТА · ЗАДРЪЖ, ЗА ДА ВИДИШ</span></span><span class="card-face card-front">${card({...c,power:displayedPower}, `${powerNote}<span class="state-label">СКРИТА · ${Math.floor(i/3)+1}.${i%3+1}</span>`)}</span></span>` : isBattleReveal ? `<span class="card-flip battle-card-flip"><span class="card-face card-back"><span class="back-mark">TT<br>BOOM</span></span><span class="card-face card-front ${c.color}">${card({...c,wounds:0,power:displayedPower}, '<span class="state-label">ЗАЩИТНИК</span>')}</span></span>` : isBattleAttacker ? card({...c,wounds:0,power:displayedPower}, '<span class="attacker-badge">НАПАДАТЕЛ</span>') : visible ? card({...c,power:displayedPower}, `${isSelectedAttacker ? '<span class="attacker-badge">НАПАДАТЕЛ</span>' : ''}${selectionBadge}${supportBadge}${effectButton}${powerNote}<span class="state-label">${Math.floor(i/3)+1}.${i%3+1}</span>`) : `<span class="back-mark">TT<br>BOOM</span><span class="state-label">${Math.floor(i/3)+1}.${i%3+1} · СКРИТА</span>`}</button></div>`;
   }).join('')}</div>`).join('')}</div></section>`;
 }
 function ownGridEffectPrompt() {
