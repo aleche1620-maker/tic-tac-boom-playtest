@@ -97,6 +97,8 @@ html{overflow-anchor:none;scroll-behavior:auto}
  .opponent-board .attack-cell.attack-used:has(>.wounded:not(.attacker-selected):not(.selected)){translate:0 24px}
  .opponent-board .attack-cell.attack-used>.wounded:not(.attacker-selected):not(.selected){translate:none}
 }
+/* Reveal faces fill the card border, just like the owner's hidden-card preview. */
+.attack-cell>.slot:has(>.battle-card-flip){padding:0;overflow:hidden;perspective:900px}
 </style>
 </head>
 <body>
