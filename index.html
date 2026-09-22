@@ -74,6 +74,15 @@
  .battle-card .card-top strong{font-size:13px}
 }
 @media(prefers-reduced-motion:reduce){.attack-cell .slot{transition:none}.slot.limit-pulse{animation-duration:.01s}}
+/* Keep browser scroll anchoring from following replaced board DOM nodes. */
+html{overflow-anchor:none;scroll-behavior:auto}
+.attack-cell>.slot{min-height:0;height:168px}
+.attack-cell .slot.wounded:not(.attacker-selected):not(.selected){transform:rotate(-90deg) scale(var(--wounded-scale,.8))}
+.attack-cell.attack-used>.wounded:not(.attacker-selected):not(.selected){translate:0 calc(-24px - var(--wounded-lift,0px))}
+.attack-cell .card-effect{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden;flex-shrink:0}
+.attack-cell .attacker-selected .card-effect{-webkit-line-clamp:unset}
+.attack-cell .state-label{flex-shrink:0}
+@media(max-width:540px){.attack-cell>.slot{min-height:0}.attack-cell .slot.wounded:not(.attacker-selected):not(.selected){transform:none;translate:none}}
 </style>
 </head>
 <body>
@@ -479,7 +488,7 @@ const CHANGELOG = [
     title: 'По-ясни ефекти',
     summary: 'Съкратени и уеднаквени са текстовете на Stinger, Rampager, Warleader, Linebreaker и Executioner, без промяна в начина, по който работят ефектите им.'
   },
-  { version: '0.13', title: 'Линии за атака и подбор', summary: 'Червени линии показват кои карти са атакували. Добавени са общи лимити по сила и пулсиране на избраните карти при надвишаването им. Картите имат компактен цветен хедър. Rampager атакува задължително, а Avenger получава бонус само от съседно празно място в реда.' },
+  { version: '0.13', title: 'Линии за атака и подбор', summary: 'Червени линии показват кои карти са атакували. Добавени са общи лимити по сила и пулсиране на избраните карти при надвишаването им. Картите имат компактен цветен хедър. Ревизия: по-големи ранени карти, невидими празни позиции и стабилен скрол; дългият текст се разгъва само при избор на нападател. Rampager атакува задължително, а Avenger получава бонус само от съседно празно място в реда.' },
 ];
 
 
@@ -497,12 +506,47 @@ const byId = id => catalog.find(c => c.id === id);
 const label = p => `Играч ${p + 1}`;
 const bonusSource = (state, player, index) => powerSources(state, player, index).join(' + ') || 'неизвестен източник';
 const button = (text, action, attrs = '') => `<button data-action="${action}" ${attrs}>${text}</button>`;
-function card(c, extra = '', showBattleState = true) { return `<span class="card-top ${c.color}"><strong>${escape(c.name)}</strong><b>${c.power}</b></span><small>${escape(c.effect || 'Без специален ефект.')}</small>${showBattleState && c.wounds ? '<em class="wound">РАНЕНА</em>' : ''}${extra}`; }
+function card(c, extra = '', showBattleState = true) { return `<span class="card-top ${c.color}"><strong>${escape(c.name)}</strong><b>${c.power}</b></span><small class="card-effect">${escape(c.effect || 'Без специален ефект.')}</small>${showBattleState && c.wounds ? '<em class="wound">РАНЕНА</em>' : ''}${extra}`; }
 function header() { return `<header><a class="brand" href="#">TIC<span>·</span>TAC<span>·</span>BOOM</a><span class="version">PLAYTEST / ${VERSION}</span><nav>${button('Каталог', 'catalog')}${button('Нова игра', 'reset')}</nav></header>`; }
 let showCatalog = false;
 function render() {
+  const scroll = typeof window !== 'undefined' ? {x:window.scrollX,y:window.scrollY} : null;
+  const boardHeight = app.querySelector?.('.arena') ? app.querySelector('main').offsetHeight : 0;
   app.innerHTML = header() + `<main>${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}${showCatalog ? catalogView() : !started ? startScreen() : phaseIntro ? phaseScreen() : viewer === null ? cover() : game ? play() : setup()}</main><footer>Дизайнерски прототип · Версия ${VERSION} · Двама играчи на едно устройство</footer>`;
+  if (typeof window !== 'undefined') {
+    if (boardHeight && app.querySelector('.arena')) app.querySelector('main').style.minHeight = boardHeight + 'px';
+    fitBoardCards();
+    if (scroll) window.scrollTo({left:scroll.x,top:scroll.y,behavior:'instant'});
+  }
 }
+function fitBoardCards() {
+  for (const cell of app.querySelectorAll('.attack-cell')) {
+    const slot = cell.querySelector('.slot');
+    const baseHeight = Math.max(168, Math.min(260, cell.clientWidth * 1.4));
+    cell.style.minHeight = baseHeight + 'px';
+    if (!slot) continue;
+    slot.style.height = baseHeight + 'px';
+    cell.style.minHeight = baseHeight + 'px';
+    const effect = slot.querySelector('.card-effect');
+    if (slot.classList.contains('attacker-selected') && effect) {
+      effect.style.webkitLineClamp = 'unset';
+      const needed = [...slot.children].reduce((sum, el) => sum + el.offsetHeight, 0);
+      const css = getComputedStyle(slot);
+      const height = Math.max(baseHeight, needed + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom) + (slot.children.length-1)*parseFloat(css.gap) + 4);
+      slot.style.height = height + 'px';
+      cell.style.minHeight = height + 'px';
+    } else if (effect && effect.parentElement === slot) {
+      const css = getComputedStyle(slot);
+      const otherHeight = [...slot.children].filter(el=>el!==effect).reduce((sum,el)=>sum+el.offsetHeight,0);
+      const available = baseHeight - otherHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - (slot.children.length-1)*parseFloat(css.gap) - 4;
+      effect.style.webkitLineClamp = Math.max(1,Math.floor(available/parseFloat(getComputedStyle(effect).lineHeight)));
+    }
+    const scale = Math.min(1,(cell.clientWidth-8)/baseHeight);
+    slot.style.setProperty('--wounded-scale',scale);
+    slot.style.setProperty('--wounded-lift', ((baseHeight-cell.clientWidth*scale)/2) + 'px');
+  }
+}
+if (typeof window !== 'undefined') window.addEventListener('resize', fitBoardCards);
 function startScreen() {
   return `<section class="start-screen"><div class="boom-badge">3 × 3 <span>BOOM!</span></div><span class="eyebrow">ТАКТИЧЕСКА КАРТОВА ИГРА · ${VERSION}</span><h1>Подреди.<br>Разкрий. <span>Взриви.</span></h1><p>Девет карти. Две тайни полета. Един телефон между двама играчи.<br>Надхитри противника, преди последната ти карта да падне.</p>${button('Започни игра →', 'start', 'class="primary start-button"')}<p class="quiet">За двама играчи на едно устройство · около 10 минути</p>${changesPanel()}</section>`;
 }
@@ -569,7 +613,7 @@ function grid(player) {
     const isBattleAttacker = battleReveal?.attackerPlayer === player && battleReveal.attackerIndex === i;
     const isBattlePreview = isBattleReveal || isBattleAttacker;
     const c = game.boards[player][i] || (isBattleReveal ? battleReveal.card : isBattleAttacker ? battleReveal.attackerCard : null);
-    if (!c) return `<div class="attack-cell"><div class="slot empty"><span class="slot-number">${Math.floor(i/3)+1}.${i%3+1}</span><span>Празно</span></div></div>`;
+    if (!c) return '<div class="attack-cell vacant" aria-hidden="true"></div>';
     const visible = own || c.faceUp;
     const ownerHidden = own && !c.faceUp;
     const opts = stinger ? stingerEffectOptions(game, stinger.index) : null;
